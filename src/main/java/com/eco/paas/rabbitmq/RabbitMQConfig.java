@@ -3,8 +3,6 @@ package com.eco.paas.rabbitmq;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.*;
-import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
-import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,11 +22,6 @@ public class RabbitMQConfig {
 
     @Autowired
     AmqpAdmin amqpAdmin;
-
-    @Autowired
-    private CachingConnectionFactory cachingConnectionFactory;
-
-    private static SimpleMessageListenerContainer simpleMessageListenerContainer;
 
     public static String queueName = "test_queue";
 
@@ -63,8 +56,6 @@ public class RabbitMQConfig {
         log.debug("create queue,exchange");
 
     }
-
-
 
 }
 
