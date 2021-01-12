@@ -5,22 +5,25 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.ComponentScan;
 
 import java.util.Date;
 import java.util.concurrent.*;
 
 @SpringBootApplication
-public class PaasRabbitmqApplication  {
+@ComponentScan("com.eco.paas.*")
+public class PaasRabbitmqApplication implements ApplicationRunner {
 
     public static void main(String[] args) {
         SpringApplication.run(PaasRabbitmqApplication.class, args);
+
     }
 
     @Autowired
     MQProducer producer;
 
 
-//    @Override
+    @Override
     public void run(ApplicationArguments args) throws Exception {
         ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
         ThreadFactory factory = new ThreadFactory() {

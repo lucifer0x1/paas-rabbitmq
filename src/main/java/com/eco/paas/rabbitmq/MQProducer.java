@@ -1,7 +1,8 @@
 package com.eco.paas.rabbitmq;
 
-import org.springframework.amqp.core.AmqpAdmin;
+import com.eco.paas.rabbitmq.pojo.annotation.SecurityMQSender;
 import org.springframework.amqp.core.AmqpTemplate;
+import org.springframework.amqp.core.Message;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -11,7 +12,7 @@ import java.util.Map;
  * @ClassName MQProducer
  * @Author lucifer
  * @Date 4/11/19:10:51 AM
- * @Description
+ * @Description  消息持久化
  */
 @Component
 public class MQProducer {
@@ -19,19 +20,16 @@ public class MQProducer {
     @Autowired
     private AmqpTemplate template;
 
-    @Autowired
-    private AmqpAdmin admin;
-
-
     /**
      * @return void
      * @author lucifer wangxiyue.xy@163.com
      * @date 4/11/19
-     * @para[routingKey 路由关键字, msg 消息体]
-     * @功能说明: 发送内容
+     * @para[exchange 交换机, routingKey 路由关键字, msg 消息体]
+     * @功能说明:
      **/
-    public void sendMsg(String routingKey, String msg) {
-        template.convertAndSend(routingKey, msg);
+    @SecurityMQSender(exchangeName = "#exchange",routeKey = "#routingKey",content = "#msg")
+    public void sendMsg(String exchange, String routingKey, String msg) {
+        template.convertAndSend(exchange, routingKey, msg);
     }
 
     /**
@@ -41,7 +39,7 @@ public class MQProducer {
      * @para[exchange 交换机, routingKey 路由关键字, msg 消息体]
      * @功能说明:
      **/
-    public void sendMsg(String exchange, String routingKey, String msg) {
+    public void sendMsg(String exchange, String routingKey, Message msg) {
         template.convertAndSend(exchange, routingKey, msg);
     }
 
@@ -52,29 +50,15 @@ public class MQProducer {
      * @param[routeKey 交换机, msg 消息体, map 消息头信息（消息属性）]
      * @功能说明:
      **/
-    public void sendMsgModifyHead(String routeKey, String msg, Map<String, Object> map) {
-        template.convertAndSend(null, routeKey, msg, message -> {
+    public void sendMsgModifyHead(String exchange,String routeKey, String msg, Map<String, Object> map) {
+        template.convertAndSend(exchange, routeKey, msg, message -> {
             message.getMessageProperties().getHeaders().putAll(map);
             return message;
         });
     }
 
     public void log(MSGHead head) {
-        template.convertAndSend(null, "algPrint", "", message -> {
-            message.getMessageProperties().getHeaders().putAll(head.getMSG());
-            return message;
-        });
-    }
-
-    /**
-     * @return void
-     * @author lucifer wangxiyue.xy@163.com
-     * @date 4/11/19
-     * @param[routeKey 交换机, msg 消息体, map 消息头信息（消息属性）]
-     * @功能说明:
-     **/
-    public void sendMsgModifyHead(String routeKey, MSGHead head) {
-        template.convertAndSend(null, routeKey, "", message -> {
+        template.convertAndSend("algPrint", "algPrint", "", message -> {
             message.getMessageProperties().getHeaders().putAll(head.getMSG());
             return message;
         });

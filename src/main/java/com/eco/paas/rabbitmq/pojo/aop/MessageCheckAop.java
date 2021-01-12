@@ -1,0 +1,209 @@
+package com.eco.paas.rabbitmq.pojo.aop;
+
+import com.eco.paas.rabbitmq.pojo.MsgPojo;
+import com.eco.paas.rabbitmq.pojo.MsgStatus;
+import com.eco.paas.rabbitmq.pojo.annotation.SecurityMQSender;
+import com.eco.paas.redis.RedisType;
+import org.aspectj.lang.JoinPoint;
+import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.annotation.Before;
+import org.aspectj.lang.annotation.Pointcut;
+import org.aspectj.lang.reflect.MethodSignature;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.amqp.core.AmqpTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.DependsOn;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.expression.EvaluationContext;
+import org.springframework.expression.spel.standard.SpelExpressionParser;
+import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.stereotype.Component;
+
+import javax.annotation.PostConstruct;
+import javax.annotation.Resource;
+import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * @author lucifer
+ * @mail wangxiyue.xy@163.com
+ * @date 2021-01-12 13:21
+ * @projectName paas-rabbitmq
+ * @description: 消息持久化Aop ， 拦截RabbitListener 切面， 处理前消息持久化
+ */
+@Aspect
+@Component
+@DependsOn("redisTemplateDefault")
+public class MessageCheckAop {
+
+    Logger log = LoggerFactory.getLogger(MessageCheckAop.class);
+    /**
+     * @author lucifer 2021-01-12 15:30
+     * @description:
+     * <p>功能: 为特殊需求，不要修改 会影响其他服务获取不到持久化的消息 </p>
+     */
+    @Value("${com.eco.paas.rabbitmq.prefix}")
+    private static String keyPrefix = "MessagePOJO";
+    @Pointcut("@annotation(com.eco.paas.rabbitmq.pojo.annotation.SecurityMQSender)")
+    private void pointCut(){}
+
+    @Resource(name ="redisTemplateDefault")
+    HashMap<RedisType, RedisTemplate<String,Object>> redisTemplateDefault;
+    @Autowired
+    private AmqpTemplate template;
+    SpelExpressionParser parser = new SpelExpressionParser();
+
+    @Before("pointCut()")
+    public void before(JoinPoint point){
+        log.debug("发送消息前");
+        MethodSignature signature = (MethodSignature) point.getSignature();
+        SecurityMQSender sender  =  signature.getMethod().getAnnotation(SecurityMQSender.class);
+        String exchangeName = sender.exchangeName();
+        String routeKey = sender.routeKey();
+        String content = sender.content();
+        String msgId  = sender.id();
+
+        log.debug("AOP ===> 参数处理");
+        // 参数不为空时解析EL表达式
+        Object[] args = point.getArgs();
+        if (args != null && args.length != 0) {
+            // 0-2、前提条件：拿到作为key的依据  - 解析springEL表达式
+            EvaluationContext ctx = new StandardEvaluationContext();
+            String[] parameterNames = signature.getParameterNames();
+            for (int i = 0; i < parameterNames.length; i++) {
+                ctx.setVariable(parameterNames[i], arrayToStr(args[i]));
+            }
+            exchangeName =parser.parseExpression(exchangeName).getValue(ctx).toString();
+            routeKey =parser.parseExpression(routeKey).getValue(ctx).toString();
+            content =parser.parseExpression(content).getValue(ctx).toString();
+            if(msgId.equals("null")){
+                msgId = UUID.randomUUID().toString().replaceAll("-","");
+            }else {
+                msgId =parser.parseExpression(msgId).getValue(ctx).toString();
+            }
+        }
+        log.debug("组装消息");
+        MsgPojo pojo  = new MsgPojo(msgId,exchangeName,routeKey,content);
+        pojo.setStatus(MsgStatus.RUNNING);
+        log.debug("Redis持久化");
+        redisTemplateDefault.get(RedisType.Default).opsForValue().set(pojo.toRedisKey(keyPrefix), pojo , sender.ttl(), sender.unit());
+        log.debug("Message Save Redis Complete==>exchange={},routekey={}",exchangeName,routeKey);
+    }
+
+    @PostConstruct
+    public void init(){
+        ScheduledExecutorService executorService = Executors.newScheduledThreadPool(1, new ThreadFactory() {
+            @Override
+            public Thread newThread(Runnable r) {
+                Thread t = new Thread(r);
+                t.setDaemon(true);
+                t.setName("HeartBeat ===> "+ r.getClass());
+                return t;
+            }
+        });
+        log.debug("开启心跳服务====>监控Redis 持久化消息");
+        executorService.scheduleAtFixedRate(new HeartBeatPoll(redisTemplateDefault.get(RedisType.Default),template),
+                0,10, TimeUnit.SECONDS);
+        log.debug("心跳服务正常运行");
+    }
+
+    /**
+     * 数组转String
+     * 例如：int[] i = new int[]{1, 2, 3};
+     * 返回：[1, 2, 3]
+     *
+     * @param o 数组
+     * @return str
+     * @author Hash
+     */
+    private String arrayToStr(Object o) {
+        if (o == null) {
+            return null;
+        }
+        if (!o.getClass().isArray()) {
+            return o.toString();
+        }
+        if (o instanceof byte[]) {
+            return Arrays.toString((byte[]) o);
+        } else if (o instanceof short[]) {
+            return Arrays.toString((short[]) o);
+        } else if (o instanceof int[]) {
+            return Arrays.toString((int[]) o);
+        } else if (o instanceof long[]) {
+            return Arrays.toString((long[]) o);
+        } else if (o instanceof float[]) {
+            return Arrays.toString((float[]) o);
+        } else if (o instanceof double[]) {
+            return Arrays.toString((double[]) o);
+        } else if (o instanceof char[]) {
+            return Arrays.toString((char[]) o);
+        } else {
+            return o.toString();
+        }
+    }
+
+    /**
+     * @author lucifer 2021-01-12 15:01
+     * @description:
+     * <p>功能: 心跳监测过期消息</p>
+     */
+    private static class HeartBeatPoll implements Runnable {
+
+        Logger log  = LoggerFactory.getLogger(HeartBeatPoll.class);
+        private final RedisTemplate<String,Object> redisTemplate;
+        private final AmqpTemplate template;
+
+        public HeartBeatPoll(RedisTemplate<String,Object> redisTemplate,AmqpTemplate amqpTemplate){
+            this.redisTemplate = redisTemplate;
+            this.template = amqpTemplate;
+            log.debug("心跳线程初始化===>{}","[ok]");
+        }
+
+        @Override
+        public void run() {
+            String  pattern  =keyPrefix +":*:*:" + MsgStatus.RUNNING + ":*";
+            Set<String> keys = this.redisTemplate.keys(pattern);
+            List<Object> msgPojoList = this.redisTemplate.opsForValue().multiGet(keys);
+            for (Object o : msgPojoList) {
+                if(o instanceof MsgPojo){
+                    MsgPojo msg = (MsgPojo)o;
+                    template.convertAndSend(msg.getExchangeName(), msg.getRouteKey(), msg.getContent());
+                    log.debug("重新发送消息 {} ===> {} 成功",msg.getExchangeName(),msg.getRouteKey());
+                }else{
+                    log.error("Redis持久化的消息结构不是 {}",MsgPojo.class);
+                }
+            }
+
+            /**
+             * @author lucifer 2021-01-12 17:01
+             * @description:
+             * <p>功能: 校验Key</p>
+             */
+//            String exchangeName;
+//            String routeKey;
+//            String content;
+//            for (String key : keys) {
+//                //keyPrefix : exchange  : routekey : RUNNING
+//                if(key==null || key.length()< 7){
+//                    continue;
+//                }
+//                String[] kSplit = key.split(":");
+//                if(kSplit.length==4){
+//                    exchangeName  = kSplit[1];
+//                    routeKey = kSplit[2];
+//                    content = this.redisTemplate.opsForValue().get(key);
+//                }
+//            }
+
+
+        }
+
+
+    }
+}
