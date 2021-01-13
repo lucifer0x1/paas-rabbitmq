@@ -10,7 +10,9 @@ package com.eco.paas.rabbitmq.pojo;
 public enum MsgStatus {
 
     OVERDUE("过期"),
-    RUNNING("发送中");
+    RUNNING("发送中"),
+    OK("已处理");
+
     private String description;
 
     MsgStatus(String descript){

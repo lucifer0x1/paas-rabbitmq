@@ -1,5 +1,6 @@
 package com.eco.paas.rabbitmq;
 
+import com.eco.paas.rabbitmq.demo.MSGHead;
 import com.eco.paas.rabbitmq.pojo.annotation.SecurityMQSender;
 import org.springframework.amqp.core.AmqpTemplate;
 import org.springframework.amqp.core.Message;
@@ -7,6 +8,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import java.util.UUID;
+
+import static com.eco.paas.rabbitmq.pojo.MQConstants.HEADER_MESSAGE_POJO_ID_KEY;
 
 /**
  * @ClassName MQProducer
@@ -27,9 +31,13 @@ public class MQProducer {
      * @para[exchange 交换机, routingKey 路由关键字, msg 消息体]
      * @功能说明:
      **/
-    @SecurityMQSender(exchangeName = "#exchange",routeKey = "#routingKey",content = "#msg")
+    @SecurityMQSender(exchangeName = "#exchange",routeKey = "#routingKey",content = "#msg",id = "#msgId")
     public void sendMsg(String exchange, String routingKey, String msg) {
-        template.convertAndSend(exchange, routingKey, msg);
+        String msgId = UUID.randomUUID().toString().replaceAll("-","");
+        template.convertAndSend(exchange, routingKey, msg, message -> {
+            message.getMessageProperties().getHeaders().put(HEADER_MESSAGE_POJO_ID_KEY,msgId);
+            return message;
+        });
     }
 
     /**
@@ -57,11 +65,6 @@ public class MQProducer {
         });
     }
 
-    public void log(MSGHead head) {
-        template.convertAndSend("algPrint", "algPrint", "", message -> {
-            message.getMessageProperties().getHeaders().putAll(head.getMSG());
-            return message;
-        });
-    }
+
 
 }

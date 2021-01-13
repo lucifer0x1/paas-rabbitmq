@@ -32,7 +32,6 @@ public class MsgPojo implements Serializable {
         this.routeKey  = routeKey;
         this.content = content;
         insertTime = new Date();
-
     }
 
     public MsgPojo(String msgId,String exchangeName, String routeKey, String content, MsgStatus status, Date insertTime, Date expireTime) {
@@ -45,6 +44,11 @@ public class MsgPojo implements Serializable {
         this.expireTime = expireTime;
     }
 
+    /**
+     * @author lucifer 2021-01-13 13:50
+     * @description:
+     * <p>功能: keyPrefix : exchange : route : status : msgId </p>
+     */
     public String toRedisKey(String keyPrefix){
         StringBuilder sb  =new StringBuilder();
         sb.append(keyPrefix)

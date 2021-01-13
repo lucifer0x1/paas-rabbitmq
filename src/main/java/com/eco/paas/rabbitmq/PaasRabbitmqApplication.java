@@ -8,6 +8,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.ComponentScan;
 
 import java.util.Date;
+import java.util.UUID;
 import java.util.concurrent.*;
 
 @SpringBootApplication
@@ -21,6 +22,8 @@ public class PaasRabbitmqApplication implements ApplicationRunner {
 
     @Autowired
     MQProducer producer;
+    @Autowired
+    RabbitMQConfig config;
 
 
     @Override
@@ -32,7 +35,7 @@ public class PaasRabbitmqApplication implements ApplicationRunner {
                 Thread sender  = new Thread(new Runnable() {
                     @Override
                     public void run() {
-                        producer.sendMsg(RabbitMQConfig.exchangeName,RabbitMQConfig.routeKey,"This is Msg ==> " + new Date());
+                        producer.sendMsg(config.exchangeName,config.routeKey,"This is Msg ==> " + new Date());
                         System.out.println("send ok");
                         r.run();
                     }

@@ -3,7 +3,13 @@ package com.eco.paas.rabbitmq;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.*;
+import org.springframework.amqp.rabbit.config.DirectRabbitListenerContainerFactory;
+import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.listener.DirectMessageListenerContainer;
+import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -23,11 +29,14 @@ public class RabbitMQConfig {
     @Autowired
     AmqpAdmin amqpAdmin;
 
-    public static String queueName = "test_queue";
+    @Value("${com.eco.paas.rabbitmq.queue:test_queue}")
+    public String queueName = "test_queue";
 
-    public static String exchangeName = "test_exchange";
+    @Value("${com.eco.paas.rabbitmq.exchange:test_exchange}")
+    public String exchangeName = "test_exchange";
 
-    public static String routeKey = "test_route";
+    @Value("${com.eco.paas.rabbitmq.route:test_route}")
+    public String routeKey = "test_route";
 
     @Bean
     public Queue localQueue(){
@@ -56,6 +65,16 @@ public class RabbitMQConfig {
         log.debug("create queue,exchange");
 
     }
+
+    @Bean
+    public SimpleMessageListenerContainer SimpleMessageListenerContainer(ConnectionFactory connectionFactory){
+        SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
+        factory.setConnectionFactory(connectionFactory);
+        factory.setAcknowledgeMode(AcknowledgeMode.MANUAL);
+        return factory.createListenerContainer();
+    }
+
+
 
 }
 

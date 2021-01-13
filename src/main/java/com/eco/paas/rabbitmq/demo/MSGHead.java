@@ -1,4 +1,4 @@
-package com.eco.paas.rabbitmq;
+package com.eco.paas.rabbitmq.demo;
 
 import java.util.HashMap;
 import java.util.Map;
