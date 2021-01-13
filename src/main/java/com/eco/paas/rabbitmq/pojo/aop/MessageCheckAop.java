@@ -2,12 +2,11 @@ package com.eco.paas.rabbitmq.pojo.aop;
 
 import com.eco.paas.rabbitmq.pojo.MsgPojo;
 import com.eco.paas.rabbitmq.pojo.MsgStatus;
+import com.eco.paas.rabbitmq.pojo.annotation.SecurityMQReceiver;
 import com.eco.paas.rabbitmq.pojo.annotation.SecurityMQSender;
 import com.eco.paas.redis.RedisType;
 import org.aspectj.lang.JoinPoint;
-import org.aspectj.lang.annotation.Aspect;
-import org.aspectj.lang.annotation.Before;
-import org.aspectj.lang.annotation.Pointcut;
+import org.aspectj.lang.annotation.*;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,17 +49,39 @@ public class MessageCheckAop {
      */
     @Value("${com.eco.paas.rabbitmq.prefix}")
     private static String keyPrefix = "MessagePOJO";
-    @Pointcut("@annotation(com.eco.paas.rabbitmq.pojo.annotation.SecurityMQSender)")
-    private void pointCut(){}
-
     @Resource(name ="redisTemplateDefault")
     HashMap<RedisType, RedisTemplate<String,Object>> redisTemplateDefault;
     @Autowired
     private AmqpTemplate template;
+
     SpelExpressionParser parser = new SpelExpressionParser();
 
-    @Before("pointCut()")
-    public void before(JoinPoint point){
+    /**
+     * 发送消息持久化切面
+     */
+    @Pointcut("@annotation(com.eco.paas.rabbitmq.pojo.annotation.SecurityMQSender)")
+    private void senderPointCut(){}
+
+    /**
+     * 接收消息持久化切面(监听)
+     */
+    @Pointcut("@annotation(com.eco.paas.rabbitmq.pojo.annotation.SecurityMQReceiver)")
+    private void receiverPointCut(){};
+
+    @AfterReturning("receiverPointCut()")
+    public void afterReturnRecv(JoinPoint point,Object result){
+        MethodSignature signature = (MethodSignature) point.getSignature();
+        SecurityMQReceiver receiver  =  signature.getMethod().getAnnotation(SecurityMQReceiver.class);
+        String exchangeName = receiver.exchange();
+        String routeKey = receiver.route();
+
+
+
+        redisTemplateDefault.get(RedisType.Defualt).opsForValue().getAndSet()
+    }
+
+    @Before("senderPointCut()")
+    public void beforeSend(JoinPoint point){
         log.debug("发送消息前");
         MethodSignature signature = (MethodSignature) point.getSignature();
         SecurityMQSender sender  =  signature.getMethod().getAnnotation(SecurityMQSender.class);
