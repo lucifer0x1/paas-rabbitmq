@@ -31,9 +31,9 @@ public class MQProducer {
      * @para[exchange 交换机, routingKey 路由关键字, msg 消息体]
      * @功能说明:
      **/
-    @SecurityMQSender(exchangeName = "#exchange",routeKey = "#routingKey",content = "#msg",id = "#msgId")
-    public void sendMsg(String exchange, String routingKey, String msg) {
-        String msgId = UUID.randomUUID().toString().replaceAll("-","");
+    @SecurityMQSender(exchangeName = "#exchange",routeKey = "#routingKey",content = "#msg", id= "#msgId")
+    public void sendMsg(String exchange, String routingKey, String msg,String msgId) {
+
         template.convertAndSend(exchange, routingKey, msg, message -> {
             message.getMessageProperties().getHeaders().put(HEADER_MESSAGE_POJO_ID_KEY,msgId);
             return message;

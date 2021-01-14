@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 
@@ -22,6 +23,7 @@ import javax.annotation.PostConstruct;
  * @Description
  */
 @Configuration
+@Component
 public class RabbitMQConfig {
 
     Logger log  = LoggerFactory.getLogger(RabbitMQConfig.class);
@@ -30,17 +32,17 @@ public class RabbitMQConfig {
     AmqpAdmin amqpAdmin;
 
     @Value("${com.eco.paas.rabbitmq.queue:test_queue}")
-    public String queueName = "test_queue";
+    public static String queueName = "test_queue";
 
     @Value("${com.eco.paas.rabbitmq.exchange:test_exchange}")
-    public String exchangeName = "test_exchange";
+    public static String exchangeName = "test_exchange";
 
     @Value("${com.eco.paas.rabbitmq.route:test_route}")
-    public String routeKey = "test_route";
+    public static String routeKey = "test_route";
 
     @Bean
     public Queue localQueue(){
-        return  new Queue(queueName,true,false,true);
+        return  new Queue(queueName,false,false,true);
     }
 
     @Bean
@@ -66,13 +68,13 @@ public class RabbitMQConfig {
 
     }
 
-    @Bean
-    public SimpleMessageListenerContainer SimpleMessageListenerContainer(ConnectionFactory connectionFactory){
-        SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
-        factory.setConnectionFactory(connectionFactory);
-        factory.setAcknowledgeMode(AcknowledgeMode.MANUAL);
-        return factory.createListenerContainer();
-    }
+//    @Bean("factory")
+//    public SimpleRabbitListenerContainerFactory SimpleRabbitListenerContainerFactory(ConnectionFactory connectionFactory){
+//        SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
+//        factory.setConnectionFactory(connectionFactory);
+//        factory.setAcknowledgeMode(AcknowledgeMode.MANUAL);
+//        return factory;
+//    }
 
 
 

@@ -35,7 +35,9 @@ public class PaasRabbitmqApplication implements ApplicationRunner {
                 Thread sender  = new Thread(new Runnable() {
                     @Override
                     public void run() {
-                        producer.sendMsg(config.exchangeName,config.routeKey,"This is Msg ==> " + new Date());
+                        String msgId = UUID.randomUUID().toString().replaceAll("-","");
+                        producer.sendMsg(config.exchangeName,config.routeKey,
+                                "This is Msg ==> " + new Date(),msgId);
                         System.out.println("send ok");
                         r.run();
                     }

@@ -66,9 +66,6 @@ public class MessageCheckAop implements BeanPostProcessor {
     private AmqpTemplate amqpTemplate;
 
     @Autowired
-    private SimpleMessageListenerContainer container;
-
-    @Autowired
     private AmqpAdmin amqpAdmin;
 
     SpelExpressionParser parser = new SpelExpressionParser();
@@ -79,78 +76,8 @@ public class MessageCheckAop implements BeanPostProcessor {
     @Pointcut("@annotation(com.eco.paas.rabbitmq.pojo.annotation.SecurityMQSender)")
     private void senderPointCut(){}
 
-    /**
-     * 接收消息持久化切面(监听)
-     */
-    @Pointcut("@annotation(com.eco.paas.rabbitmq.pojo.annotation.SecurityMQReceiver)")
-    private void receiverPointCut(){};
-
-    @Around(value = "receiverPointCut()")
-    public void aroud(ProceedingJoinPoint joinPoint, SecurityMQReceiver receiver){
-        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
-        String exchangeName = receiver.exchange();
-        String routeKey = receiver.route();
-        String queue = receiver.queue();
-        Object[] args = joinPoint.getArgs();
-        if (args != null && args.length != 0) {
-            // 0-2、前提条件：拿到作为key的依据  - 解析springEL表达式
-            EvaluationContext ctx = new StandardEvaluationContext();
-            String[] parameterNames = signature.getParameterNames();
-            for (int i = 0; i < parameterNames.length; i++) {
-                ctx.setVariable(parameterNames[i], arrayToStr(args[i]));
-            }
-            exchangeName =parser.parseExpression(exchangeName).getValue(ctx).toString();
-            routeKey =parser.parseExpression(routeKey).getValue(ctx).toString();
-            queue =parser.parseExpression(queue).getValue(ctx).toString();
-        }
-
-        if(!queueCache.containsKey(queue)){
-            if(amqpAdmin.getQueueInfo(queue)==null){
-                amqpAdmin.deleteQueue(queue);
-                amqpAdmin.declareBinding(BindingBuilder.bind(new Queue(queue))
-                        .to(new TopicExchange(exchangeName)).with(routeKey));
-            }
-            bindListener(joinPoint,exchangeName,routeKey);
-            queueCache.put(queue,amqpAdmin.getQueueInfo(queue));
-        }
-//
-    }
-
-
-    private void bindListener(ProceedingJoinPoint joinPoint,String exchange,String route){
-        MsgPojo msgPojo = new MsgPojo();
-        msgPojo.setStatus(MsgStatus.OK);
-        msgPojo.setExchangeName(exchange);
-        msgPojo.setRouteKey(route);
-        container.setMessageListener(new ChannelAwareBatchMessageListener() {
-            @Override
-            public void onMessageBatch(List<Message> messages, Channel channel) {
-                messages.forEach(m-> {
-                    try {
-                        joinPoint.proceed(new Object[]{m});
-                        channel.basicNack(m.getMessageProperties().getDeliveryTag(),
-                                false,false);
-                        msgPojo.setMsgId(m.getMessageProperties().getHeader(HEADER_MESSAGE_POJO_ID_KEY));
-//                        MsgPojo  oldPojo = (MsgPojo) redisTemplateDefault.get(RedisType.Default).opsForValue().get(msgPojo.toRedisKey(keyPrefix));
-                        boolean flag = redisTemplateDefault.get(RedisType.Default).delete(msgPojo.toRedisKey(keyPrefix));
-                        if(!flag){
-                            log.error("[From Redis]清理持久化消息失败");
-                        }
-                        log.debug("处理消息[{}] 成功",msgPojo.getMsgId());
-                    } catch (IOException e) {
-                        log.debug("消息队列中无{}消息，或已被确认==>{}",
-                                m.getMessageProperties().getDeliveryTag(),e.getMessage());
-                    } catch (Throwable throwable) {
-                        log.debug("消息处理失败，不处理该消息==>{}",throwable.getMessage());
-                    }
-                });
-            }
-        });
-    }
-
     @Before("senderPointCut()")
     public void beforeSend(JoinPoint point){
-        log.debug("发送消息前");
         MethodSignature signature = (MethodSignature) point.getSignature();
         SecurityMQSender sender  =  signature.getMethod().getAnnotation(SecurityMQSender.class);
         String exchangeName = sender.exchangeName();
@@ -158,7 +85,6 @@ public class MessageCheckAop implements BeanPostProcessor {
         String content = sender.content();
         String msgId  = sender.id();
 
-        log.debug("AOP ===> 参数处理");
         // 参数不为空时解析EL表达式
         Object[] args = point.getArgs();
         if (args != null && args.length != 0) {
@@ -181,7 +107,7 @@ public class MessageCheckAop implements BeanPostProcessor {
         log.debug("组装消息");
         MsgPojo pojo  = new MsgPojo(msgId,exchangeName,routeKey,content);
         pojo.setStatus(MsgStatus.RUNNING);
-        log.debug("Redis持久化");
+        log.debug("Redis持久化 key === >{}",msgId);
         redisTemplateDefault.get(RedisType.Default).opsForValue().set(pojo.toRedisKey(keyPrefix), pojo , sender.ttl(), sender.unit());
         log.debug("Message Save Redis Complete==>exchange={},routekey={}",exchangeName,routeKey);
     }
@@ -199,7 +125,7 @@ public class MessageCheckAop implements BeanPostProcessor {
         });
         log.debug("开启心跳服务====>监控Redis 持久化消息");
         executorService.scheduleAtFixedRate(new HeartBeatPoll(keyPrefix,redisTemplateDefault.get(RedisType.Default),amqpTemplate),
-                0,10, TimeUnit.SECONDS);
+                30,60, TimeUnit.SECONDS);
         log.debug("心跳服务正常运行");
     }
 
@@ -267,7 +193,10 @@ public class MessageCheckAop implements BeanPostProcessor {
             for (Object o : msgPojoList) {
                 if(o instanceof MsgPojo){
                     MsgPojo msg = (MsgPojo)o;
-                    template.convertAndSend(msg.getExchangeName(), msg.getRouteKey(), msg.getContent());
+                    template.convertAndSend(msg.getExchangeName(), msg.getRouteKey(), msg.getContent(),m -> {
+                        m.getMessageProperties().getHeaders().put(HEADER_MESSAGE_POJO_ID_KEY,msg.getMsgId());
+                        return m;
+                    });
                     log.debug("重新发送消息 {} ===> {} 成功",msg.getExchangeName(),msg.getRouteKey());
                 }else{
                     log.error("Redis持久化的消息结构不是 {}",MsgPojo.class);
