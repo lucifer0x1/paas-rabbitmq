@@ -59,6 +59,20 @@ public class MsgPojo implements Serializable {
         return sb.toString();
     }
 
+    @Override
+    public String toString() {
+        return "MsgPojo{" +
+                "msgId='" + msgId + '\'' +
+                ", exchangeName='" + exchangeName + '\'' +
+                ", routeKey='" + routeKey + '\'' +
+                ", content='" + content + '\'' +
+                ", status=" + status +
+                ", insertTime=" + insertTime +
+                ", expireTime=" + expireTime +
+                ", targetCount=" + targetCount +
+                '}';
+    }
+
     public String getMsgId() {
         return msgId;
     }

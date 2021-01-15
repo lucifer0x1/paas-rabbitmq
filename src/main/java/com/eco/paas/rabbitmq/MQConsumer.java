@@ -3,27 +3,18 @@ package com.eco.paas.rabbitmq;
 import com.eco.paas.rabbitmq.pojo.MsgPojo;
 import com.eco.paas.rabbitmq.pojo.MsgStatus;
 import com.eco.paas.rabbitmq.pojo.annotation.SecurityMQReceiver;
-import com.eco.paas.rabbitmq.pojo.aop.MessageCheckAop;
 import com.eco.paas.redis.RedisType;
 import com.rabbitmq.client.Channel;
-import jdk.nashorn.internal.objects.annotations.Constructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.AcknowledgeMode;
-import org.springframework.amqp.core.AmqpTemplate;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
-import org.springframework.amqp.rabbit.listener.RabbitListenerEndpoint;
 import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
-import org.springframework.amqp.rabbit.listener.api.ChannelAwareBatchMessageListener;
 import org.springframework.amqp.rabbit.listener.api.ChannelAwareMessageListener;
-import org.springframework.amqp.support.ConsumerTagStrategy;
 import org.springframework.beans.BeansException;
-import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.core.annotation.MergedAnnotations;
@@ -32,14 +23,12 @@ import org.springframework.expression.EvaluationContext;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.util.ReflectionUtils;
-
 import javax.annotation.PostConstruct;
 import java.io.IOException;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static com.eco.paas.rabbitmq.pojo.MQConstants.HEADER_MESSAGE_POJO_ID_KEY;
@@ -71,6 +60,8 @@ public abstract class MQConsumer {
     public abstract void onMsg(Message msg);
 
     ConcurrentLinkedQueue<QueueCacheObj> msgCache = new ConcurrentLinkedQueue<>();
+
+    private static ScheduledExecutorService executorService;
 
     @Bean
     public SimpleMessageListenerContainer madeContainer() throws BeansException {
@@ -163,7 +154,8 @@ public abstract class MQConsumer {
 
     @PostConstruct
     public void init(){
-        ScheduledExecutorService executorService = Executors.newScheduledThreadPool(1, new ThreadFactory() {
+
+        executorService = Executors.newSingleThreadScheduledExecutor( new ThreadFactory() {
             @Override
             public Thread newThread(Runnable r) {
                 Thread thread = new Thread(r);
@@ -232,28 +224,36 @@ public abstract class MQConsumer {
                 log.debug("消息确认缓存为空");
                 return;
             }
+            log.debug(queue.peek().msgPojo.toString());
             long count = 0;
-            boolean reFlag = doRelease(queue.peek());
-            count++;
-            while(reFlag){
-               reFlag = doRelease(queue.peek());
-               count ++;
+            //count++
+            try{
+                while(doRelease(queue.peek())){
+                    count ++;
+                }
+                log.debug("本次释放 {} 个",count);
+            }catch (Exception e){
+                log.error("{}",e);
             }
-            log.debug("本次释放 {} 个",count);
+
         }
 
         private boolean  doRelease(QueueCacheObj cacheObj){
             boolean isDelSuccess = false;
+            if(cacheObj==null){
+                return isDelSuccess;
+            }
             String redisKey = cacheObj.msgPojo.toRedisKey(redisKeyPattern);
 //            cacheObj.reCount++;
 //            if(cacheObj.reCount>reCountTimes){
 //                queue.poll()
 //            }
             if(redisTemplate.hasKey(redisKey)){
+                log.debug("find key ===> {}",redisKey);
                 isDelSuccess =redisTemplate.delete(redisKey);
                 if(isDelSuccess){
                     log.debug("[From Redis]成功清理消息===>{}",redisKey);
-//                    while(queue.poll()!=null);
+                    queue.poll();
                 }else{
                     log.error("[From Redis]清理持久化消息失败 key pattern=[{}]",redisKey);
                 }
