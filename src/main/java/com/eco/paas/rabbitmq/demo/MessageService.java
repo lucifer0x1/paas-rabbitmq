@@ -32,7 +32,6 @@ public class MessageService extends MQConsumer {
         if (message!=null){
             MSGHead head = new MSGHead(message.getMessageProperties().getHeaders());
             head.setCONTENT( new String(message.getBody()));
-            System.out.println(head.toJSONSTR());
         }
     }
 

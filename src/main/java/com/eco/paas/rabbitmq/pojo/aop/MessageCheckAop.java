@@ -35,6 +35,7 @@ import java.util.*;
 import java.util.concurrent.*;
 
 import static com.eco.paas.rabbitmq.pojo.MQConstants.HEADER_MESSAGE_POJO_ID_KEY;
+import static com.eco.paas.rabbitmq.pojo.MQConstants.MESSAGE_RESEND_SECOND;
 
 /**
  * @author lucifer
@@ -125,7 +126,7 @@ public class MessageCheckAop implements BeanPostProcessor {
         });
         log.debug("开启心跳服务====>监控Redis 持久化消息");
         executorService.scheduleAtFixedRate(new HeartBeatPoll(keyPrefix,redisTemplateDefault.get(RedisType.Default),amqpTemplate),
-                30,60, TimeUnit.SECONDS);
+                180,180, TimeUnit.SECONDS);
         log.debug("心跳服务正常运行");
     }
 
@@ -193,6 +194,11 @@ public class MessageCheckAop implements BeanPostProcessor {
             for (Object o : msgPojoList) {
                 if(o instanceof MsgPojo){
                     MsgPojo msg = (MsgPojo)o;
+                    if((msg.getInsertTime().getTime() + MESSAGE_RESEND_SECOND) > System.currentTimeMillis() ){
+                        System.out.println(System.currentTimeMillis());
+                        System.out.println(msg.getInsertTime().getTime());
+                        continue;
+                    }
                     template.convertAndSend(msg.getExchangeName(), msg.getRouteKey(), msg.getContent(),m -> {
                         m.getMessageProperties().getHeaders().put(HEADER_MESSAGE_POJO_ID_KEY,msg.getMsgId());
                         return m;

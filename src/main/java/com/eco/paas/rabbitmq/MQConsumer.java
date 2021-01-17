@@ -63,6 +63,7 @@ public abstract class MQConsumer {
 
     private static ScheduledExecutorService executorService;
 
+    @PostConstruct
     @Bean
     public SimpleMessageListenerContainer madeContainer() throws BeansException {
         List<SimpleMessageListenerContainer> containers = new ArrayList<>();
@@ -102,7 +103,7 @@ public abstract class MQConsumer {
             SimpleMessageListenerContainer container =factory.createListenerContainer();
 //            container.getActiveConsumerCount()
             container.setConcurrentConsumers(1);
-            container.setMaxConcurrentConsumers(5);
+            container.setMaxConcurrentConsumers(1);
             //设置是否重回队列
             container.setDefaultRequeueRejected(false);
             //设置监听外露
@@ -165,7 +166,7 @@ public abstract class MQConsumer {
             }
         });
         executorService.scheduleAtFixedRate(new HeartBeatRecv(3,keyPrefix,redisTemplateDefault.get(RedisType.Default),msgCache),
-                1,1, TimeUnit.SECONDS);
+                10,10, TimeUnit.SECONDS);
         log.debug("初始化确认消息心跳线程池");
     }
 
@@ -253,7 +254,12 @@ public abstract class MQConsumer {
                 isDelSuccess =redisTemplate.delete(redisKey);
                 if(isDelSuccess){
                     log.debug("[From Redis]成功清理消息===>{}",redisKey);
-                    queue.poll();
+                    try{
+                        queue.poll();
+                    }catch (Exception e){
+                        log.error("poll cache error :",e);
+                    }
+
                 }else{
                     log.error("[From Redis]清理持久化消息失败 key pattern=[{}]",redisKey);
                 }

@@ -33,7 +33,6 @@ public class MQProducer {
      **/
     @SecurityMQSender(exchangeName = "#exchange",routeKey = "#routingKey",content = "#msg", id= "#msgId")
     public void sendMsg(String exchange, String routingKey, String msg,String msgId) {
-
         template.convertAndSend(exchange, routingKey, msg, message -> {
             message.getMessageProperties().getHeaders().put(HEADER_MESSAGE_POJO_ID_KEY,msgId);
             return message;
