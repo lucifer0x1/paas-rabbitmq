@@ -54,6 +54,9 @@ public abstract class MQConsumer {
     @Autowired
     private SimpleRabbitListenerContainerFactory factory;
 
+    @Autowired
+    private RabbitMQListenerEndpointRegistry registry;
+
     @Value("${com.eco.paas.rabbitmq.pojo.prefix:MessagePOJO}")
     private String keyPrefix;
 
@@ -61,11 +64,12 @@ public abstract class MQConsumer {
 
     ConcurrentLinkedQueue<QueueCacheObj> msgCache = new ConcurrentLinkedQueue<>();
 
+
+
     private static ScheduledExecutorService executorService;
 
-    @PostConstruct
-    @Bean
-    public SimpleMessageListenerContainer madeContainer() throws BeansException {
+
+    public void madeContainer() throws BeansException {
         List<SimpleMessageListenerContainer> containers = new ArrayList<>();
         /**
          * @author lucifer 2021-01-14 11:20
@@ -83,7 +87,7 @@ public abstract class MQConsumer {
 
         if(metaListeners.size()<=0){
             log.debug("没有发现[{}]注解类",SecurityMQReceiver.class);
-            return null;
+            return;
 //            throw new BeanCreationNotAllowedException(this.getClass().getName(),"未获取 自定义注解 SecurityMQReceiver，不能绑定消息队列");
         }
         log.debug("目标  [{}] ===> ",this.getClass());
@@ -103,7 +107,7 @@ public abstract class MQConsumer {
             SimpleMessageListenerContainer container =factory.createListenerContainer();
 //            container.getActiveConsumerCount()
             container.setConcurrentConsumers(1);
-            container.setMaxConcurrentConsumers(1);
+            container.setMaxConcurrentConsumers(10);
             //设置是否重回队列
             container.setDefaultRequeueRejected(false);
             //设置监听外露
@@ -150,7 +154,9 @@ public abstract class MQConsumer {
 
             containers.add(container);
         });
-        return containers.get(0);
+
+        registry.registry(containers);
+//        return containers.get(0);
     }
 
     @PostConstruct
@@ -168,6 +174,7 @@ public abstract class MQConsumer {
         executorService.scheduleAtFixedRate(new HeartBeatRecv(3,keyPrefix,redisTemplateDefault.get(RedisType.Default),msgCache),
                 10,10, TimeUnit.SECONDS);
         log.debug("初始化确认消息心跳线程池");
+        madeContainer();
     }
 
     private Collection<SecurityMQReceiver> findListenerAnnotations(AnnotatedElement element) {

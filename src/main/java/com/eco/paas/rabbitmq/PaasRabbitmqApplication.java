@@ -62,7 +62,7 @@ public class PaasRabbitmqApplication implements ApplicationRunner {
             }
         };
         executor.scheduleAtFixedRate(factory.newThread(new Thread()),
-                0, 5, TimeUnit.MILLISECONDS);
+                0, 100, TimeUnit.MILLISECONDS);
 
     }
 }

@@ -46,4 +46,14 @@ public class MessageService extends MQConsumer {
         }
 
     }
+
+//    @SecurityMQReceiver(exchange = "test_exchange1",
+//            route = "test_route1",queue = "test_queue1")
+//    public void onMsg1(Message msg) {
+//        if (msg!=null){
+//            MSGHead head = new MSGHead(msg.getMessageProperties().getHeaders());
+//            head.setCONTENT( new String(msg.getBody()));
+//            System.out.println(head.toJSONSTR());
+//        }
+//    }
 }

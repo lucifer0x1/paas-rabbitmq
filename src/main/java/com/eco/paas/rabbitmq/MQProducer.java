@@ -8,7 +8,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
-import java.util.UUID;
 
 import static com.eco.paas.rabbitmq.pojo.MQConstants.HEADER_MESSAGE_POJO_ID_KEY;
 
